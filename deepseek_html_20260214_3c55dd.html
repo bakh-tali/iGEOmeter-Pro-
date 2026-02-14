@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iGEOmeter Pro – Professional GIS & Address Report Tool</title>
+    
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Leaflet Draw -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+    
+    <!-- Leaflet Measure -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-measure/dist/leaflet-measure.css" />
+    <script src="https://unpkg.com/leaflet-measure/dist/leaflet-measure.js"></script>
+    
+    <!-- Turf.js -->
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    
+    <!-- Proj4 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+    
+    <!-- FileSaver, JSZip, PapaParse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    
+    <!-- toGeoJSON for KML -->
+    <script src="https://unpkg.com/togeojson@0.16.0/togeojson.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0f1a2b;
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+        }
+        .app-container {
+            display: grid;
+            grid-template-columns: 300px 1fr 400px;
+            grid-template-rows: 80px 1fr 50px;
+            height: 100vh;
+            gap: 1px;
+            background: #2d3e2d;
+        }
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #01411c, #025e29);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+            box-shadow: 0 4px 20px rgba(1,65,28,0.3);
+            position: relative;
+            overflow: hidden;
+            z-index: 1000;
+        }
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 30px 30px;
+            animation: gridMove 30s linear infinite;
+        }
+        @keyframes gridMove {
+            0% { transform: translate(0,0) rotate(0deg); }
+            100% { transform: translate(-15px,-15px) rotate(0.1deg); }
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            z-index: 1;
+        }
+        .logo-icon {
+            font-size: 40px;
+            color: #ffd700;
+            background: rgba(255,215,0,0.2);
+            width: 60px;
+            height: 60px;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,215,0,0.3);
+        }
+        .logo-text {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg,#fff,#ffd700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            font-size: 12px;
+            color: #ffd700;
+            margin-left: 10px;
+            font-style: italic;
+        }
+        .header-controls {
+            display: flex;
+            gap: 12px;
+            z-index: 1;
+        }
+        .header-btn {
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+        }
+        .header-btn:hover {
+            background: rgba(255,255,255,0.25);
+            transform: translateY(-2px);
+        }
+        .header-btn.primary {
+            background: #d4a373;
+            border-color: #b68a4a;
+        }
+        /* Tooltip */
+        [data-tooltip] {
+            position: relative;
+            cursor: pointer;
+        }
+        [data-tooltip]:before {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            background: #333;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            z-index: 2000;
+        }
+        [data-tooltip]:hover:before {
+            opacity: 1;
+        }
+        /* Left sidebar */
+        .left-sidebar {
+            background: #2d3e2d;
+            border-right: 1px solid #c0b9a0;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffd700;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #d4a373;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .tool-category {
+            background: rgba(0,0,0,0.2);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 25px;
+        }
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .category-header i {
+            color: #ffd700;
+            font-size: 20px;
+        }
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(2,1fr);
+            gap: 12px;
+        }
+        .tool-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,215,0,0.3);
+            border-radius: 12px;
+            padding: 15px 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            color: white;
+            text-align: center;
+        }
+        .tool-btn:hover {
+            background: #025e29;
+            border-color: #ffd700;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(255,215,0,0.2);
+        }
+        .tool-btn i {
+            font-size: 24px;
+            color: #ffd700;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .tool-btn span {
+            font-size: 12px;
+            font-weight: 500;
+        }
+        /* Location report panel */
+        .location-panel {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid #ffd700;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 25px;
+        }
+        .location-title {
+            color: #ffd700;
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 16px;
+        }
+        .location-content {
+            font-size: 13px;
+            line-height: 1.6;
+            color: #fff;
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ffd700;
+            word-break: break-word;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .location-content i {
+            color: #ffd700;
+            margin-right: 8px;
+        }
+        /* Main map */
+        .main-content {
+            background: #1a2e1a;
+            position: relative;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        .map-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .left-spacer {
+            flex: 1;
+        }
+        .search-box {
+            background: rgba(26,46,26,0.95);
+            border: 1px solid #d4a373;
+            border-radius: 40px;
+            padding: 8px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            width: 450px;
+            backdrop-filter: blur(10px);
+        }
+        .search-box input {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 14px;
+            width: 100%;
+            padding: 8px 0;
+            outline: none;
+        }
+        .search-box input::placeholder {
+            color: rgba(255,255,255,0.6);
+        }
+        .search-btn {
+            background: #d4a373;
+            border: none;
+            border-radius: 30px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: white;
+        }
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            background: rgba(26,46,26,0.95);
+            padding: 8px;
+            border-radius: 40px;
+            backdrop-filter: blur(10px);
+            border: 1px solid #d4a373;
+            flex: 1;
+            justify-content: flex-end;
+        }
+        .quick-btn {
+            width: 44px;
+            height: 44px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,215,0,0.3);
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: white;
+            transition: all 0.3s;
+        }
+        .quick-btn:hover {
+            background: #025e29;
+            border-color: #ffd700;
+            transform: scale(1.1);
+        }
+        /* Right sidebar */
+        .right-sidebar {
+            background: #2d3e2d;
+            border-left: 1px solid #c0b9a0;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .data-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .data-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffd700;
+        }
+        .add-data-btn {
+            background: #d4a373;
+            border: none;
+            border-radius: 30px;
+            padding: 8px 16px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .layer-list {
+            margin-bottom: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .layer-item {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,215,0,0.2);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .layer-item.active {
+            border-color: #ffd700;
+            background: rgba(255,215,0,0.15);
+        }
+        .layer-item:hover {
+            border-color: #ffd700;
+            background: rgba(255,215,0,0.1);
+        }
+        .layer-icon {
+            width: 30px;
+            height: 30px;
+            background: #01411c;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffd700;
+        }
+        .layer-info {
+            flex: 1;
+        }
+        .layer-name {
+            font-weight: 600;
+            color: white;
+            font-size: 13px;
+        }
+        .layer-feature-count {
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+        }
+        .layer-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .layer-action {
+            background: none;
+            border: none;
+            color: rgba(255,255,255,0.5);
+            cursor: pointer;
+            padding: 4px;
+        }
+        .layer-action:hover {
+            color: #ffd700;
+        }
+        /* Attribute table */
+        .attr-section {
+            flex: 1;
+            min-height: 200px;
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+        .attr-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .attr-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffd700;
+        }
+        .attr-table-container {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,215,0,0.2);
+            border-radius: 8px;
+            overflow-x: auto;
+            flex: 1;
+        }
+        .attr-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .attr-table th {
+            background: #01411c;
+            color: #ffd700;
+            padding: 6px 4px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        .attr-table td {
+            padding: 4px;
+            border-bottom: 1px solid rgba(255,215,0,0.1);
+            color: #fff;
+        }
+        .attr-table input {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid #ffd700;
+            border-radius: 4px;
+            color: white;
+            padding: 2px 4px;
+            width: 100%;
+        }
+        .zoom-btn {
+            background: none;
+            border: none;
+            color: #ffd700;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        /* Converter panel */
+        .converter-panel {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,215,0,0.2);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+        .converter-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #ffd700;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .converter-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .converter-input {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #ffd700;
+            border-radius: 6px;
+            padding: 6px;
+            color: white;
+            width: 80px;
+        }
+        .converter-select {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #ffd700;
+            border-radius: 6px;
+            padding: 6px;
+            color: white;
+            flex: 1;
+            min-width: 100px;
+        }
+        .converter-result {
+            background: #01411c;
+            color: #ffd700;
+            padding: 8px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+        .converter-note {
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 8px;
+            text-align: center;
+        }
+        /* Measurement panel */
+        .measurement-panel {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            right: 30px;
+            background: rgba(26,46,26,0.95);
+            border: 1px solid #d4a373;
+            border-radius: 20px;
+            padding: 20px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            display: none;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.5);
+        }
+        .measurement-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffd700;
+            margin-bottom: 15px;
+        }
+        .measurement-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px,1fr));
+            gap: 12px;
+        }
+        .measurement-card {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,215,0,0.3);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        .measurement-value {
+            font-size: 16px;
+            font-weight: 700;
+            color: #ffd700;
+            margin-bottom: 4px;
+            word-break: break-word;
+        }
+        .measurement-label {
+            font-size: 11px;
+            color: rgba(255,255,255,0.8);
+        }
+        /* Status bar */
+        .status-bar {
+            grid-column: 1/-1;
+            background: #1a2e1a;
+            border-top: 1px solid #c0b9a0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.8);
+        }
+        .status-left {
+            display: flex;
+            gap: 30px;
+        }
+        .status-right {
+            display: flex;
+            gap: 30px;
+        }
+        .coordinate-status {
+            font-family: 'Courier New', monospace;
+        }
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+        }
+        .modal-content {
+            background: #2d3e2d;
+            border: 1px solid #d4a373;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .modal-header h3 {
+            color: #ffd700;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .modal-input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #ffd700;
+            border-radius: 8px;
+            color: white;
+            margin-bottom: 20px;
+        }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .file-upload-area {
+            border: 2px dashed #d4a373;
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            margin: 20px 0;
+        }
+        .file-upload-area i {
+            font-size: 48px;
+            color: #ffd700;
+            margin-bottom: 10px;
+        }
+        .loading-spinner {
+            display: none;
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%,-50%);
+            z-index: 3000;
+            text-align: center;
+        }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid #ffd700;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0%{transform:rotate(0);}100%{transform:rotate(360deg);} }
+        .spinner-text { margin-top:10px; color:white; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon"><i class="fas fa-globe-asia"></i></div>
+                <div>
+                    <div class="logo-text">iGEOmeter Pro</div>
+                    <div class="subtitle">Institute of Geo‑Information & Earth Observation</div>
+                </div>
+            </div>
+            <div class="header-controls">
+                <button class="header-btn" data-tooltip="New Project" onclick="newProject()"><i class="fas fa-file"></i> New</button>
+                <button class="header-btn" data-tooltip="Open Project" onclick="openProject()"><i class="fas fa-folder-open"></i> Open</button>
+                <button class="header-btn" data-tooltip="Save Project" onclick="saveProject()"><i class="fas fa-save"></i> Save</button>
+                <button class="header-btn" data-tooltip="Import Data" onclick="showModal('importModal')"><i class="fas fa-file-import"></i> Import</button>
+                <button class="header-btn primary" data-tooltip="Export Active Layer" onclick="showModal('exportModal')"><i class="fas fa-file-export"></i> Export</button>
+                <button class="header-btn" data-tooltip="Help" onclick="showModal('helpModal')"><i class="fas fa-question-circle"></i> Help</button>
+            </div>
+        </header>
+
+        <!-- Left Sidebar (Drawing Tools + Location Report) -->
+        <div class="left-sidebar">
+            <div class="section-title"><i class="fas fa-ruler-combined"></i> Drawing Tools</div>
+            
+            <div class="tool-category">
+                <div class="category-header"><i class="fas fa-draw-polygon"></i> Area</div>
+                <div class="tool-grid">
+                    <div class="tool-btn" data-tooltip="Draw polygon in active layer" onclick="drawPolygon()"><i class="fas fa-draw-polygon"></i><span>Draw Parcel</span></div>
+                    <div class="tool-btn" data-tooltip="Calculate area of selected feature" onclick="calculateArea()"><i class="fas fa-calculator"></i><span>Calculate Area</span></div>
+                </div>
+            </div>
+            
+            <div class="tool-category">
+                <div class="category-header"><i class="fas fa-ruler"></i> Distance</div>
+                <div class="tool-grid">
+                    <div class="tool-btn" data-tooltip="Draw line in active layer" onclick="drawLine()"><i class="fas fa-minus"></i><span>Draw Line</span></div>
+                    <div class="tool-btn" data-tooltip="Measure distance" onclick="measureDistance()"><i class="fas fa-arrows-alt-h"></i><span>Distance</span></div>
+                    <div class="tool-btn" data-tooltip="Measure perimeter" onclick="measurePerimeter()"><i class="fas fa-border-style"></i><span>Perimeter</span></div>
+                    <div class="tool-btn" data-tooltip="Measure bearing" onclick="measureBearing()"><i class="fas fa-compass"></i><span>Bearing</span></div>
+                </div>
+            </div>
+            
+            <div class="tool-category">
+                <div class="category-header"><i class="fas fa-map-marker-alt"></i> Points</div>
+                <div class="tool-grid">
+                    <div class="tool-btn" data-tooltip="Add point to active layer" onclick="drawPoint()"><i class="fas fa-map-pin"></i><span>Add Point</span></div>
+                    <div class="tool-btn" data-tooltip="GPS survey point" onclick="addSurveyPoint()"><i class="fas fa-crosshairs"></i><span>GPS Survey</span></div>
+                </div>
+            </div>
+
+            <!-- Location Report Panel (exactly as requested) -->
+            <div class="location-panel">
+                <div class="location-title">
+                    <i class="fas fa-map-pin"></i> Location Report
+                </div>
+                <div class="location-content" id="locationReport">
+                    <i class="fas fa-map-marker-alt"></i> Click on map or draw a feature to get complete address information
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Map -->
+        <div class="main-content">
+            <div id="map"></div>
+            <div class="map-overlay">
+                <div class="left-spacer"></div>
+                <div class="search-box">
+                    <i class="fas fa-search" style="color:#ffd700;"></i>
+                    <input type="text" id="searchInput" placeholder="Search place or coordinates...">
+                    <button class="search-btn" onclick="searchLocation()"><i class="fas fa-arrow-right"></i></button>
+                </div>
+                <div class="quick-actions">
+                    <button class="quick-btn" onclick="zoomIn()"><i class="fas fa-plus"></i></button>
+                    <button class="quick-btn" onclick="zoomOut()"><i class="fas fa-minus"></i></button>
+                    <button class="quick-btn" onclick="fitToView()"><i class="fas fa-expand"></i></button>
+                    <button class="quick-btn" onclick="getMyLocation()"><i class="fas fa-location-crosshairs"></i></button>
+                    <button class="quick-btn" onclick="clearLayers()"><i class="fas fa-trash-alt"></i></button>
+                    <button class="quick-btn" onclick="toggleBasemap()"><i class="fas fa-layer-group"></i></button>
+                </div>
+            </div>
+            <!-- Measurement panel -->
+            <div id="measurementPanel" class="measurement-panel">
+                <div class="measurement-title"><i class="fas fa-chart-pie"></i> Measurement Results</div>
+                <div id="measurementGrid" class="measurement-grid"></div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar (only Layers, Attribute Table, Unit Converter) -->
+        <div class="right-sidebar">
+            <div class="data-header">
+                <div class="data-title"><i class="fas fa-layers"></i> Layers</div>
+                <button class="add-data-btn" onclick="createNewLayer()"><i class="fas fa-plus"></i> New Layer</button>
+            </div>
+            <div class="layer-list" id="layerList"></div>
+
+            <div class="attr-section">
+                <div class="attr-header">
+                    <div class="attr-title"><i class="fas fa-table"></i> Attribute Table</div>
+                </div>
+                <div class="attr-table-container" id="attrTableContainer">
+                    <table class="attr-table" id="attrTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Area (m²)</th>
+                                <th>Length (m)</th>
+                                <th>Lat/Lng</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attrTableBody">
+                            <tr><td colspan="7" style="text-align:center; color:#888;">Select a layer</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Enhanced Unit Converter -->
+            <div class="converter-panel">
+                <div class="converter-title"><i class="fas fa-exchange-alt"></i> Unit Converter (World & Pakistan)</div>
+                <div class="converter-row">
+                    <input type="number" id="convVal" class="converter-input" value="1" step="any">
+                    <select id="convFrom" class="converter-select">
+                        <option value="sqm">Square Meter (m²)</option>
+                        <option value="sqkm">Square Kilometer (km²)</option>
+                        <option value="ha">Hectare (ha)</option>
+                        <option value="acre">Acre</option>
+                        <option value="sqft">Square Foot (ft²)</option>
+                        <option value="sqyd">Square Yard (yd²)</option>
+                        <option value="marla">Marla (272.25 ft²)</option>
+                        <option value="marla_urban">Marla Urban (225 ft²)</option>
+                        <option value="kanal">Kanal (5445 ft²)</option>
+                        <option value="bigha_up">Bigha (UP/Punjab ~27200 ft²)</option>
+                    </select>
+                </div>
+                <div class="converter-row">
+                    <span style="color:#ffd700;">→</span>
+                    <select id="convTo" class="converter-select">
+                        <option value="sqm">Square Meter (m²)</option>
+                        <option value="sqkm">Square Kilometer (km²)</option>
+                        <option value="ha">Hectare (ha)</option>
+                        <option value="acre">Acre</option>
+                        <option value="sqft">Square Foot (ft²)</option>
+                        <option value="sqyd">Square Yard (yd²)</option>
+                        <option value="marla">Marla (272.25 ft²)</option>
+                        <option value="marla_urban">Marla Urban (225 ft²)</option>
+                        <option value="kanal">Kanal (5445 ft²)</option>
+                        <option value="bigha_up">Bigha (UP/Punjab ~27200 ft²)</option>
+                    </select>
+                    <button class="header-btn" onclick="quickConvert()" style="padding:6px 12px;">Convert</button>
+                </div>
+                <div id="convResult" class="converter-result">1 m² = 10.764 ft²</div>
+                <div class="converter-note">
+                    * 1 Kanal = 20 Marlas (Std) = 5445 ft²<br>
+                    * 1 Acre = 8 Kanals = 43560 ft²
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-left">
+                <span><i class="fas fa-project-diagram"></i> Active Layer: <span id="activeLayerName">None</span></span>
+                <span><i class="fas fa-layer-group"></i> Total Layers: <span id="totalLayers">0</span></span>
+            </div>
+            <div class="status-right">
+                <span class="coordinate-status" id="coordinateStatus">30.3753°N, 69.3451°E</span>
+                <span><i class="fas fa-map-pin"></i> UTM: <span id="utmStatus">42N</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden file input -->
+    <input type="file" id="fileInput" style="display:none;" accept=".igeo,.geojson,.kml,.kmz,.gpx,.csv">
+
+    <!-- Modals -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Import Data</h3>
+                <button class="modal-close" onclick="closeModal('importModal')">&times;</button>
+            </div>
+            <div class="file-upload-area" onclick="triggerFileInput('import')">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h4>Click to select file</h4>
+                <p>GeoJSON, KML, GPX, CSV</p>
+            </div>
+            <div class="modal-actions">
+                <button class="header-btn" onclick="closeModal('importModal')">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="exportModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Export Active Layer</h3>
+                <button class="modal-close" onclick="closeModal('exportModal')">&times;</button>
+            </div>
+            <p>Choose format:</p>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:20px 0;">
+                <button class="tool-btn" onclick="exportFormat('geojson')">GeoJSON</button>
+                <button class="tool-btn" onclick="exportFormat('kml')">KML</button>
+                <button class="tool-btn" onclick="exportFormat('csv')">CSV</button>
+                <button class="tool-btn" onclick="exportFormat('gpx')">GPX</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>About iGEOmeter Pro</h3>
+                <button class="modal-close" onclick="closeModal('helpModal')">&times;</button>
+            </div>
+            <p><strong>Version 6.0</strong> – Professional GIS & Survey Tool with Complete Address Information</p>
+            <p><i class="fas fa-map-pin"></i> <strong>Address Information:</strong> Just like GPS Camera, this tool provides complete address details including country, city, road, and full formatted address for any clicked location or drawn feature.</p>
+            <p>Features:</p>
+            <ul style="margin-left:20px; color:#ddd;">
+                <li>Multiple layers with attribute tables</li>
+                <li>Draw points, lines, polygons (named)</li>
+                <li>Project save/load (.igeo)</li>
+                <li>Import/Export GeoJSON, KML, GPX, CSV</li>
+                <li>Comprehensive unit conversions (World & Pakistan)</li>
+                <li>GPS Camera style complete address report</li>
+                <li>Area, length, lat/lng in attribute table</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Loading Spinner -->
+    <div id="loadingSpinner" class="loading-spinner">
+        <div class="spinner"></div>
+        <div class="spinner-text">Processing...</div>
+    </div>
+
+    <script>
+        // ========== GLOBALS ==========
+        let map, drawnItems, drawControl, measureControl, currentBasemap = 'osm';
+        let layers = [];
+        let activeLayerId = null;
+        let nextFeatureId = 1;
+
+        // Land unit conversions (all to sqft as base)
+        const landUnits = {
+            sqm: 10.7639,
+            sqkm: 10763910.4,
+            ha: 107639.104,
+            acre: 43560,
+            sqft: 1,
+            sqyd: 9,
+            marla: 272.25,
+            marla_urban: 225,
+            kanal: 5445,
+            bigha_up: 27200
+        };
+
+        // ========== INIT MAP ==========
+        function initMap() {
+            map = L.map('map').setView([30.3753, 69.3451], 6);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+            drawControl = new L.Control.Draw({
+                position: 'topleft',
+                draw: {
+                    polygon: { allowIntersection: false, showArea: true, shapeOptions: { color: '#ffd700', weight: 4 } },
+                    polyline: { shapeOptions: { color: '#ffd700', weight: 4 } },
+                    rectangle: { shapeOptions: { color: '#ffd700', weight: 4 } },
+                    circle: false,
+                    marker: {
+                        icon: L.divIcon({
+                            html: '<i class="fas fa-map-pin" style="color:#ffd700; font-size:28px;"></i>',
+                            iconSize: [28,28], iconAnchor: [14,28]
+                        })
+                    }
+                },
+                edit: { featureGroup: new L.FeatureGroup() }
+            });
+            map.addControl(drawControl);
+
+            measureControl = new L.Control.Measure({ position: 'topleft' });
+            map.addControl(measureControl);
+
+            map.on(L.Draw.Event.CREATED, handleDrawCreated);
+            map.on('mousemove', updateCoordinates);
+            map.on('click', function(e) {
+                // On map click, show complete address report
+                getCompleteAddressReport(e.latlng.lat, e.latlng.lng);
+            });
+
+            // Create default layer
+            createNewLayer('Default Layer');
+        }
+
+        // ========== COMPLETE ADDRESS REPORT (GPS Camera Style) ==========
+        async function getCompleteAddressReport(lat, lng) {
+            const addressDiv = document.getElementById('locationReport');
+            
+            // Show loading
+            addressDiv.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Fetching address...`;
+
+            try {
+                // Using Nominatim OpenStreetMap API with address details
+                const response = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+                    {
+                        headers: {
+                            'User-Agent': 'iGEOmeter Pro - GIS Tool'
+                        }
+                    }
+                );
+                const data = await response.json();
+                
+                if (data && data.display_name) {
+                    // Get address components
+                    const addr = data.address || {};
+                    const country = addr.country || 'Unknown';
+                    const state = addr.state || addr.region || '';
+                    const city = addr.city || addr.town || addr.village || addr.municipality || '';
+                    const road = addr.road || addr.path || '';
+                    const postcode = addr.postcode || '';
+                    
+                    // Build detailed address report (like GPS Camera)
+                    let report = `<i class="fas fa-map-marker-alt"></i> <strong>Complete Address:</strong><br>`;
+                    report += `${data.display_name}<br><br>`;
+                    report += `<i class="fas fa-globe"></i> <strong>Country:</strong> ${country}<br>`;
+                    if (state) report += `<i class="fas fa-map"></i> <strong>State/Province:</strong> ${state}<br>`;
+                    if (city) report += `<i class="fas fa-city"></i> <strong>City/Town:</strong> ${city}<br>`;
+                    if (road) report += `<i class="fas fa-road"></i> <strong>Road:</strong> ${road}<br>`;
+                    if (postcode) report += `<i class="fas fa-mail-bulk"></i> <strong>Postal Code:</strong> ${postcode}<br>`;
+                    
+                    addressDiv.innerHTML = report;
+                } else {
+                    addressDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> No address found for this location`;
+                }
+            } catch (error) {
+                console.error('Address fetch error:', error);
+                addressDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error fetching address`;
+            }
+        }
+
+        // ========== LAYER MANAGEMENT ==========
+        function createNewLayer(name = null) {
+            if (!name) name = prompt('Enter layer name:', 'Layer ' + (layers.length+1));
+            if (!name) return;
+            const id = 'layer_' + Date.now() + '_' + Math.random().toString(36);
+            const featureGroup = new L.FeatureGroup().addTo(map);
+            const layerObj = {
+                id,
+                name,
+                featureGroup,
+                features: []
+            };
+            layers.push(layerObj);
+            setActiveLayer(id);
+            updateLayerList();
+            updateAttributeTable();
+            return id;
+        }
+
+        function setActiveLayer(id) {
+            activeLayerId = id;
+            updateLayerList();
+            updateAttributeTable();
+            document.getElementById('activeLayerName').innerText = getLayerById(id)?.name || 'None';
+        }
+
+        function getLayerById(id) {
+            return layers.find(l => l.id === id);
+        }
+
+        function deleteLayer(id) {
+            if (!confirm('Delete layer and all its features?')) return;
+            const idx = layers.findIndex(l => l.id === id);
+            if (idx !== -1) {
+                map.removeLayer(layers[idx].featureGroup);
+                layers.splice(idx, 1);
+                if (activeLayerId === id) {
+                    activeLayerId = layers.length ? layers[0].id : null;
+                }
+                updateLayerList();
+                updateAttributeTable();
+                document.getElementById('activeLayerName').innerText = activeLayerId ? getLayerById(activeLayerId).name : 'None';
+            }
+        }
+
+        function toggleLayerVisibility(id) {
+            const layer = getLayerById(id);
+            if (!layer) return;
+            if (map.hasLayer(layer.featureGroup)) {
+                map.removeLayer(layer.featureGroup);
+            } else {
+                map.addLayer(layer.featureGroup);
+            }
+            updateLayerList();
+        }
+
+        function updateLayerList() {
+            const container = document.getElementById('layerList');
+            container.innerHTML = '';
+            layers.forEach(l => {
+                const div = document.createElement('div');
+                div.className = 'layer-item' + (l.id === activeLayerId ? ' active' : '');
+                div.onclick = () => setActiveLayer(l.id);
+                const visible = map.hasLayer(l.featureGroup);
+                div.innerHTML = `
+                    <div class="layer-icon"><i class="fas fa-${l.featureGroup.getLayers().length ? 'map' : 'folder-open'}"></i></div>
+                    <div class="layer-info">
+                        <div class="layer-name">${l.name}</div>
+                        <div class="layer-feature-count">${l.featureGroup.getLayers().length} features</div>
+                    </div>
+                    <div class="layer-actions">
+                        <button class="layer-action" onclick="event.stopPropagation(); toggleLayerVisibility('${l.id}')"><i class="fas fa-eye${visible ? '' : '-slash'}"></i></button>
+                        <button class="layer-action" onclick="event.stopPropagation(); deleteLayer('${l.id}')"><i class="fas fa-trash"></i></button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            document.getElementById('totalLayers').innerText = layers.length;
+        }
+
+        // ========== HANDLE DRAW ==========
+        function handleDrawCreated(e) {
+            if (!activeLayerId) {
+                alert('Please create or select a layer first.');
+                return;
+            }
+            const layer = e.layer;
+            const activeLayer = getLayerById(activeLayerId);
+            if (!activeLayer) return;
+
+            const name = prompt('Enter a name for this feature:', 'Feature');
+            const props = { name: name || 'Unnamed', id: nextFeatureId++ };
+
+            activeLayer.featureGroup.addLayer(layer);
+
+            const featureData = {
+                leafletId: L.stamp(layer),
+                geomType: layer instanceof L.Marker ? 'Point' : (layer instanceof L.Polygon ? 'Polygon' : 'Line'),
+                properties: props,
+                layer: layer
+            };
+            activeLayer.features.push(featureData);
+
+            let popup = `<b>${props.name}</b><br>`;
+            let lat, lng;
+            
+            if (layer instanceof L.Marker) {
+                const ll = layer.getLatLng();
+                lat = ll.lat;
+                lng = ll.lng;
+                popup += `Lat: ${lat.toFixed(6)}<br>Lng: ${lng.toFixed(6)}`;
+                showCoordinateMeasurement(ll);
+                // Get complete address for this point
+                getCompleteAddressReport(lat, lng);
+            } else if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
+                const dist = calculateLineDistance(layer);
+                popup += `Length: ${dist.toFixed(2)} m`;
+                showDistanceMeasurement(dist);
+                // For line, get address of first point
+                const firstPoint = layer.getLatLngs()[0];
+                if (Array.isArray(firstPoint)) {
+                    const point = firstPoint[0];
+                    if (point) {
+                        lat = point.lat;
+                        lng = point.lng;
+                        getCompleteAddressReport(lat, lng);
+                    }
+                } else {
+                    lat = firstPoint.lat;
+                    lng = firstPoint.lng;
+                    getCompleteAddressReport(lat, lng);
+                }
+            } else if (layer instanceof L.Polygon) {
+                const area = L.GeometryUtil.geodesicArea(layer.getLatLngs()[0]);
+                popup += `Area: ${area.toFixed(2)} m²`;
+                showLandMeasurement(area);
+                // For polygon, get address of centroid
+                const center = layer.getBounds().getCenter();
+                getCompleteAddressReport(center.lat, center.lng);
+            }
+            layer.bindPopup(popup).openPopup();
+
+            updateLayerList();
+            updateAttributeTable();
+        }
+
+        // ========== ATTRIBUTE TABLE ==========
+        function updateAttributeTable() {
+            const tbody = document.getElementById('attrTableBody');
+            if (!activeLayerId) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Select a layer</td></tr>';
+                return;
+            }
+            const layer = getLayerById(activeLayerId);
+            if (!layer) return;
+
+            let html = '';
+            layer.features.forEach(f => {
+                const geom = f.layer;
+                let area = '', length = '', latlng = '';
+                if (geom instanceof L.Polygon) {
+                    const a = L.GeometryUtil.geodesicArea(geom.getLatLngs()[0]);
+                    area = a.toFixed(2);
+                } else if (geom instanceof L.Polyline && !(geom instanceof L.Polygon)) {
+                    const len = calculateLineDistance(geom);
+                    length = len.toFixed(2);
+                } else if (geom instanceof L.Marker) {
+                    const ll = geom.getLatLng();
+                    latlng = `${ll.lat.toFixed(6)}, ${ll.lng.toFixed(6)}`;
+                }
+                html += `<tr>
+                    <td>${f.properties.id}</td>
+                    <td><input type="text" value="${f.properties.name || ''}" onchange="updateFeatureName('${activeLayerId}', '${f.leafletId}', this.value)"></td>
+                    <td>${f.geomType}</td>
+                    <td>${area}</td>
+                    <td>${length}</td>
+                    <td>${latlng}</td>
+                    <td><button class="zoom-btn" onclick="zoomToFeature('${activeLayerId}', '${f.leafletId}')"><i class="fas fa-search"></i></button></td>
+                </tr>`;
+            });
+            if (html === '') html = '<tr><td colspan="7" style="text-align:center;">No features</td></tr>';
+            tbody.innerHTML = html;
+        }
+
+        function updateFeatureName(layerId, leafletId, newName) {
+            const layer = getLayerById(layerId);
+            if (!layer) return;
+            const feat = layer.features.find(f => f.leafletId == leafletId);
+            if (feat) {
+                feat.properties.name = newName;
+                const popup = feat.layer.getPopup();
+                if (popup) {
+                    let content = `<b>${newName}</b><br>`;
+                    if (feat.layer instanceof L.Marker) {
+                        const ll = feat.layer.getLatLng();
+                        content += `Lat: ${ll.lat.toFixed(6)}<br>Lng: ${ll.lng.toFixed(6)}`;
+                    } else if (feat.layer instanceof L.Polyline && !(feat.layer instanceof L.Polygon)) {
+                        const dist = calculateLineDistance(feat.layer);
+                        content += `Length: ${dist.toFixed(2)} m`;
+                    } else if (feat.layer instanceof L.Polygon) {
+                        const area = L.GeometryUtil.geodesicArea(feat.layer.getLatLngs()[0]);
+                        content += `Area: ${area.toFixed(2)} m²`;
+                    }
+                    feat.layer.setPopupContent(content);
+                }
+            }
+        }
+
+        function zoomToFeature(layerId, leafletId) {
+            const layer = getLayerById(layerId);
+            if (!layer) return;
+            const feat = layer.features.find(f => f.leafletId == leafletId);
+            if (feat) {
+                map.fitBounds(feat.layer.getBounds());
+                // Also show complete address for this feature
+                if (feat.layer instanceof L.Marker) {
+                    const ll = feat.layer.getLatLng();
+                    getCompleteAddressReport(ll.lat, ll.lng);
+                } else if (feat.layer instanceof L.Polygon) {
+                    const center = feat.layer.getBounds().getCenter();
+                    getCompleteAddressReport(center.lat, center.lng);
+                } else if (feat.layer instanceof L.Polyline) {
+                    const firstPoint = feat.layer.getLatLngs()[0];
+                    if (Array.isArray(firstPoint)) {
+                        const point = firstPoint[0];
+                        if (point) getCompleteAddressReport(point.lat, point.lng);
+                    } else {
+                        getCompleteAddressReport(firstPoint.lat, firstPoint.lng);
+                    }
+                }
+            }
+        }
+
+        // ========== DRAWING FUNCTIONS ==========
+        function drawPolygon() { if(activeLayerId) drawControl._toolbars.draw._modes.polygon.handler.enable(); else alert('Select a layer first'); }
+        function drawLine() { if(activeLayerId) drawControl._toolbars.draw._modes.polyline.handler.enable(); else alert('Select a layer first'); }
+        function drawPoint() { if(activeLayerId) drawControl._toolbars.draw._modes.marker.handler.enable(); else alert('Select a layer first'); }
+        function measureDistance() { measureControl._toolbars.measure._modes.measure.handler.enable(); }
+        function measurePerimeter() { alert('Select polygon and use Calculate Area'); }
+        function measureBearing() {
+            alert('Click two points');
+            map.once('click', e1 => {
+                map.once('click', e2 => {
+                    alert('Bearing: '+calculateBearing(e1.latlng,e2.latlng).toFixed(2)+'°');
+                });
+            });
+        }
+        function calculateArea() { alert('Select a polygon feature'); }
+        
+        function addSurveyPoint() {
+            if (!activeLayerId) { alert('Select a layer first'); return; }
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(pos => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    const name = prompt('Name this GPS point:', 'GPS Point');
+                    const marker = L.marker([lat, lng]);
+                    const activeLayer = getLayerById(activeLayerId);
+                    activeLayer.featureGroup.addLayer(marker);
+                    const props = { name: name || 'GPS Point', id: nextFeatureId++ };
+                    activeLayer.features.push({ leafletId: L.stamp(marker), geomType: 'Point', properties: props, layer: marker });
+                    marker.bindPopup(`<b>${props.name}</b><br>Lat:${lat.toFixed(6)}<br>Lng:${lng.toFixed(6)}`).openPopup();
+                    updateLayerList(); updateAttributeTable();
+                    showCoordinateMeasurement({lat,lng});
+                    getCompleteAddressReport(lat, lng); // Get complete address for GPS point
+                });
+            }
+        }
+
+        // ========== MEASUREMENT DISPLAYS ==========
+        function showLandMeasurement(areaSqm) {
+            const panel = document.getElementById('measurementPanel');
+            const grid = document.getElementById('measurementGrid');
+            const areaSqft = areaSqm * 10.7639;
+            grid.innerHTML = `
+                <div class="measurement-card"><div class="measurement-value">${areaSqm.toFixed(2)}</div><div>m²</div></div>
+                <div class="measurement-card"><div class="measurement-value">${(areaSqm/1e6).toFixed(6)}</div><div>km²</div></div>
+                <div class="measurement-card"><div class="measurement-value">${areaSqft.toFixed(2)}</div><div>ft²</div></div>
+                <div class="measurement-card"><div class="measurement-value">${(areaSqft/272.25).toFixed(2)}</div><div>Marla</div></div>
+                <div class="measurement-card"><div class="measurement-value">${(areaSqft/225).toFixed(2)}</div><div>Marla(Urban)</div></div>
+                <div class="measurement-card"><div class="measurement-value">${(areaSqft/5445).toFixed(2)}</div><div>Kanal</div></div>
+                <div class="measurement-card"><div class="measurement-value">${(areaSqft/43560).toFixed(4)}</div><div>Acre</div></div>
+                <div class="measurement-card"><div class="measurement-value">${(areaSqm/10000).toFixed(4)}</div><div>Hectare</div></div>
+                <div class="measurement-card"><div class="measurement-value">${(areaSqft/27200).toFixed(4)}</div><div>Bigha</div></div>
+            `;
+            panel.style.display = 'block';
+            setTimeout(()=>panel.style.display='none', 15000);
+        }
+
+        function showDistanceMeasurement(d) {
+            const panel = document.getElementById('measurementPanel');
+            const grid = document.getElementById('measurementGrid');
+            grid.innerHTML = `
+                <div class="measurement-card"><div class="measurement-value">${d.toFixed(2)}</div><div>m</div></div>
+                <div class="measurement-card"><div class="measurement-value">${(d*3.28084).toFixed(2)}</div><div>ft</div></div>
+                <div class="measurement-card"><div class="measurement-value">${(d*1.09361).toFixed(2)}</div><div>yd</div></div>
+                <div class="measurement-card"><div class="measurement-value">${(d/1000).toFixed(3)}</div><div>km</div></div>
+                <div class="measurement-card"><div class="measurement-value">${(d/1609.34).toFixed(4)}</div><div>mi</div></div>
+                <div class="measurement-card"><div class="measurement-value">${(d/1.6764).toFixed(2)}</div><div>Karam</div></div>
+            `;
+            panel.style.display = 'block';
+            setTimeout(()=>panel.style.display='none', 10000);
+        }
+
+        function showCoordinateMeasurement(ll) {
+            const panel = document.getElementById('measurementPanel');
+            const grid = document.getElementById('measurementGrid');
+            const zone = Math.floor((ll.lng+180)/6)+1;
+            const utm = proj4('EPSG:4326', `+proj=utm +zone=${zone} +datum=WGS84`, [ll.lng, ll.lat]);
+            function toDMS(d,lat) { let dir = d>=0?(lat?'N':'E'):(lat?'S':'W'); d=Math.abs(d); let deg=Math.floor(d), min=Math.floor((d-deg)*60), sec=((d-deg-min/60)*3600).toFixed(2); return `${deg}°${min}'${sec}"${dir}`; }
+            grid.innerHTML = `
+                <div class="measurement-card"><div class="measurement-value">${ll.lat.toFixed(8)}°</div><div>Lat DD</div></div>
+                <div class="measurement-card"><div class="measurement-value">${ll.lng.toFixed(8)}°</div><div>Lon DD</div></div>
+                <div class="measurement-card"><div class="measurement-value">${toDMS(ll.lat,true)}</div><div>Lat DMS</div></div>
+                <div class="measurement-card"><div class="measurement-value">${toDMS(ll.lng,false)}</div><div>Lon DMS</div></div>
+                <div class="measurement-card"><div class="measurement-value">${zone}N</div><div>UTM Zone</div></div>
+                <div class="measurement-card"><div class="measurement-value">${utm[0].toFixed(2)}</div><div>Easting</div></div>
+                <div class="measurement-card"><div class="measurement-value">${utm[1].toFixed(2)}</div><div>Northing</div></div>
+            `;
+            panel.style.display = 'block';
+            setTimeout(()=>panel.style.display='none', 10000);
+        }
+
+        // ========== PROJECT SAVE/LOAD ==========
+        function newProject() {
+            if (!confirm('Start new project? Unsaved data will be lost.')) return;
+            layers.forEach(l => map.removeLayer(l.featureGroup));
+            layers = [];
+            activeLayerId = null;
+            createNewLayer('Default Layer');
+            document.getElementById('locationReport').innerHTML = '<i class="fas fa-map-marker-alt"></i> Click on map or draw a feature to get complete address information';
+        }
+
+        function saveProject() {
+            const project = {
+                layers: layers.map(l => ({
+                    name: l.name,
+                    features: l.features.map(f => ({
+                        geom: f.layer.toGeoJSON(),
+                        properties: f.properties
+                    }))
+                }))
+            };
+            const blob = new Blob([JSON.stringify(project, null, 2)], {type:'application/json'});
+            saveAs(blob, 'project.igeo');
+        }
+
+        function openProject() {
+            const input = document.getElementById('fileInput');
+            input.accept = '.igeo';
+            input.onchange = () => {
+                const file = input.files[0];
+                const reader = new FileReader();
+                reader.onload = e => {
+                    try {
+                        const proj = JSON.parse(e.target.result);
+                        layers.forEach(l => map.removeLayer(l.featureGroup));
+                        layers = [];
+                        proj.layers.forEach(layerData => {
+                            const fg = new L.FeatureGroup().addTo(map);
+                            const features = [];
+                            layerData.features.forEach(f => {
+                                const layer = L.geoJSON(f.geom).getLayers()[0];
+                                if (layer) {
+                                    fg.addLayer(layer);
+                                    features.push({
+                                        leafletId: L.stamp(layer),
+                                        geomType: f.geom.geometry.type,
+                                        properties: f.properties,
+                                        layer: layer
+                                    });
+                                }
+                            });
+                            layers.push({
+                                id: 'layer_' + Date.now() + Math.random(),
+                                name: layerData.name,
+                                featureGroup: fg,
+                                features: features
+                            });
+                        });
+                        if (layers.length) setActiveLayer(layers[0].id);
+                        updateLayerList(); updateAttributeTable();
+                    } catch (err) { alert('Invalid project file'); }
+                };
+                reader.readAsText(file);
+            };
+            input.click();
+        }
+
+        // ========== IMPORT/EXPORT ==========
+        function triggerFileInput(type) {
+            const inp = document.getElementById('fileInput');
+            inp.accept = type === 'import' ? '.geojson,.kml,.kmz,.gpx,.csv' : '';
+            inp.onchange = () => handleImport(inp.files[0]);
+            inp.click();
+        }
+
+        async function handleImport(file) {
+            if (!file) return;
+            const ext = file.name.split('.').pop().toLowerCase();
+            showLoading(true);
+            try {
+                let gj;
+                if (ext === 'geojson' || ext === 'json') {
+                    const txt = await file.text();
+                    gj = JSON.parse(txt);
+                } else if (ext === 'kml' || ext === 'kmz') {
+                    const txt = await file.text();
+                    const dom = new DOMParser().parseFromString(txt, 'text/xml');
+                    gj = toGeoJSON.kml(dom);
+                } else if (ext === 'gpx') {
+                    const txt = await file.text();
+                    const dom = new DOMParser().parseFromString(txt, 'text/xml');
+                    gj = toGeoJSON.gpx(dom);
+                } else if (ext === 'csv') {
+                    const txt = await file.text();
+                    const data = Papa.parse(txt, {header:true}).data;
+                    gj = {type:'FeatureCollection', features:[]};
+                    data.forEach(row => {
+                        if (row.latitude && row.longitude) {
+                            gj.features.push({
+                                type:'Feature',
+                                geometry:{type:'Point', coordinates:[parseFloat(row.longitude), parseFloat(row.latitude)]},
+                                properties:row
+                            });
+                        }
+                    });
+                } else { alert('Unsupported format'); hideLoading(); return; }
+
+                const layerName = file.name.replace(/\.[^/.]+$/, "");
+                const layerId = createNewLayer(layerName);
+                const activeLayer = getLayerById(layerId);
+                L.geoJSON(gj, {
+                    onEachFeature: (f, l) => {
+                        activeLayer.featureGroup.addLayer(l);
+                        const props = { ...f.properties, id: nextFeatureId++, name: f.properties?.name || 'Imported' };
+                        activeLayer.features.push({ leafletId: L.stamp(l), geomType: f.geometry.type, properties: props, layer: l });
+                        l.bindPopup(`<b>${props.name}</b>`);
+                    }
+                });
+                updateLayerList(); updateAttributeTable();
+            } catch(e) { alert('Error: '+e.message); }
+            hideLoading();
+            closeModal('importModal');
+        }
+
+        function exportFormat(fmt) {
+            if (!activeLayerId) { alert('No active layer'); return; }
+            const layer = getLayerById(activeLayerId);
+            const fc = {type:'FeatureCollection', features: layer.features.map(f => f.layer.toGeoJSON())};
+            if (fmt === 'geojson') {
+                saveAs(new Blob([JSON.stringify(fc,null,2)], {type:'application/json'}), layer.name+'.geojson');
+            } else if (fmt === 'kml') {
+                let kml = '<?xml version="1.0" encoding="UTF-8"?><kml><Document>';
+                layer.features.forEach(f => {
+                    if (f.geomType === 'Point') {
+                        let ll = f.layer.getLatLng();
+                        kml += `<Placemark><name>${f.properties.name||'Point'}</name><Point><coordinates>${ll.lng},${ll.lat}</coordinates></Point></Placemark>`;
+                    }
+                });
+                kml += '</Document></kml>';
+                saveAs(new Blob([kml], {type:'application/vnd.google-earth.kml+xml'}), layer.name+'.kml');
+            } else if (fmt === 'csv') {
+                let csv = 'name,latitude,longitude\n';
+                layer.features.forEach(f => {
+                    if (f.geomType === 'Point') {
+                        let ll = f.layer.getLatLng();
+                        csv += `"${f.properties.name||'Point'}",${ll.lat},${ll.lng}\n`;
+                    }
+                });
+                saveAs(new Blob([csv], {type:'text/csv'}), layer.name+'.csv');
+            } else if (fmt === 'gpx') {
+                let gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx><trk><trkseg>';
+                layer.features.forEach(f => {
+                    if (f.geomType === 'Point') {
+                        let ll = f.layer.getLatLng();
+                        gpx += `<trkpt lat="${ll.lat}" lon="${ll.lng}"><name>${f.properties.name||'Point'}</name></trkpt>`;
+                    }
+                });
+                gpx += '</trkseg></trk></gpx>';
+                saveAs(new Blob([gpx], {type:'application/gpx+xml'}), layer.name+'.gpx');
+            }
+            closeModal('exportModal');
+        }
+
+        // ========== QUICK CONVERTER ==========
+        function quickConvert() {
+            const val = parseFloat(document.getElementById('convVal').value);
+            const from = document.getElementById('convFrom').value;
+            const to = document.getElementById('convTo').value;
+            if (isNaN(val)) return;
+            const sqft = val * landUnits[from];
+            const result = sqft / landUnits[to];
+            document.getElementById('convResult').innerText = `${val} ${from} = ${result.toFixed(6)} ${to}`;
+        }
+
+        // ========== UTILITIES ==========
+        function calculateLineDistance(layer) {
+            let d=0, ll=layer.getLatLngs();
+            for (let i=0; i<ll.length-1; i++) d+=ll[i].distanceTo(ll[i+1]);
+            return d;
+        }
+        function calculateBearing(l1,l2) {
+            const dLon = (l2.lng-l1.lng)*Math.PI/180;
+            const lat1=l1.lat*Math.PI/180, lat2=l2.lat*Math.PI/180;
+            const y=Math.sin(dLon)*Math.cos(lat2);
+            const x=Math.cos(lat1)*Math.sin(lat2)-Math.sin(lat1)*Math.cos(lat2)*Math.cos(dLon);
+            return (Math.atan2(y,x)*180/Math.PI+360)%360;
+        }
+        function updateCoordinates(e) {
+            document.getElementById('coordinateStatus').innerText = `${e.latlng.lat.toFixed(6)}°N, ${e.latlng.lng.toFixed(6)}°E`;
+            document.getElementById('utmStatus').innerText = Math.floor((e.latlng.lng+180)/6)+1+'N';
+        }
+        function zoomIn() { map.zoomIn(); }
+        function zoomOut() { map.zoomOut(); }
+        function fitToView() { map.setView([30.3753,69.3451],6); }
+        function getMyLocation() { if(navigator.geolocation) navigator.geolocation.getCurrentPosition(p => map.setView([p.coords.latitude,p.coords.longitude],15)); }
+        function clearLayers() { if(confirm('Clear all drawn features?')){ layers.forEach(l=>l.featureGroup.clearLayers()); layers = []; activeLayerId=null; createNewLayer('Default Layer'); } }
+        function toggleBasemap() {
+            const b=['osm','satellite','topographic']; let idx=b.indexOf(currentBasemap); idx=(idx+1)%b.length; currentBasemap=b[idx];
+            map.eachLayer(l=>{if(l instanceof L.TileLayer)map.removeLayer(l);});
+            const url = currentBasemap==='osm'?'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png':
+                        currentBasemap==='satellite'?'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}':
+                        'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
+            L.tileLayer(url,{maxZoom:19}).addTo(map);
+        }
+        function searchLocation() {
+            const q = document.getElementById('searchInput').value;
+            if (!q) return;
+            if (q.includes(',')) {
+                const p = q.split(',').map(Number);
+                if (p.length===2 && !isNaN(p[0]) && !isNaN(p[1])) {
+                    map.setView([p[0],p[1]], 14);
+                    L.marker([p[0],p[1]]).addTo(map).bindPopup('Searched').openPopup();
+                    getCompleteAddressReport(p[0], p[1]);
+                    return;
+                }
+            }
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`)
+                .then(r=>r.json()).then(d=>{ if(d.length) { map.setView([d[0].lat,d[0].lon],12); getCompleteAddressReport(d[0].lat, d[0].lon); } });
+        }
+        function showModal(id) { document.getElementById(id).style.display='flex'; }
+        function closeModal(id) { document.getElementById(id).style.display='none'; }
+        function showLoading(on) { document.getElementById('loadingSpinner').style.display = on ? 'block' : 'none'; }
+
+        document.addEventListener('DOMContentLoaded', initMap);
+    </script>
+</body>
+</html>
